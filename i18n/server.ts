@@ -25,6 +25,12 @@ export const getLocaleOnServer = async (): Promise<Locale> => {
   }
 
   // match locale
-  const matchedLocale = match(languages, locales, i18n.defaultLocale) as Locale
-  return matchedLocale
+  try {
+    // Negotiator returns ['*'] when Accept-Language is missing or '*',
+    // and the locale cookie may hold an invalid tag — both make match() throw
+    return match(languages.filter(language => language !== '*'), locales, i18n.defaultLocale) as Locale
+  }
+  catch {
+    return i18n.defaultLocale as Locale
+  }
 }
