@@ -11,9 +11,9 @@ export function Markdown(props: { content: string }) {
   return (
     <div className="markdown-body">
       <ReactMarkdown
-        remarkPlugins={[RemarkMath, RemarkGfm, RemarkBreaks]}
+        remarkPlugins={[RemarkMath as any, RemarkGfm as any, RemarkBreaks as any]}
         rehypePlugins={[
-          RehypeKatex,
+          RehypeKatex as any,
         ]}
         components={{
           code({ node, inline, className, children, ...props }) {

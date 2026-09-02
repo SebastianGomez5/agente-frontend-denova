@@ -40,13 +40,13 @@ const UploadOnlyFromLocal: FC<UploadOnlyFromLocalProps> = ({
 }
 
 interface UploaderButtonProps {
-  methods: VisionSettings['transfer_methods']
+  methods?: VisionSettings['transfer_methods']
   onUpload: (imageFile: ImageFile) => void
   disabled?: boolean
   limit?: number
 }
 const UploaderButton: FC<UploaderButtonProps> = ({
-  methods,
+  methods = [TransferMethod.local_file],
   onUpload,
   disabled,
   limit,
@@ -54,7 +54,7 @@ const UploaderButton: FC<UploaderButtonProps> = ({
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
 
-  const hasUploadFromLocal = methods.find(method => method === TransferMethod.local_file)
+  const hasUploadFromLocal = (methods || []).find(method => method === TransferMethod.local_file)
 
   const handleUpload = (imageFile: ImageFile) => {
     setOpen(false)
@@ -115,7 +115,7 @@ const UploaderButton: FC<UploaderButtonProps> = ({
 }
 
 interface ChatImageUploaderProps {
-  settings: VisionSettings
+  settings?: VisionSettings
   onUpload: (imageFile: ImageFile) => void
   disabled?: boolean
 }
@@ -124,24 +124,25 @@ const ChatImageUploader: FC<ChatImageUploaderProps> = ({
   onUpload,
   disabled,
 }) => {
-  const onlyUploadLocal = settings.transfer_methods.length === 1 && settings.transfer_methods[0] === TransferMethod.local_file
+  const methods = settings?.transfer_methods || [TransferMethod.local_file]
+  const onlyUploadLocal = methods.length === 1 && methods[0] === TransferMethod.local_file
 
   if (onlyUploadLocal) {
     return (
       <UploadOnlyFromLocal
         onUpload={onUpload}
         disabled={disabled}
-        limit={+settings.image_file_size_limit!}
+        limit={+(settings?.image_file_size_limit ?? 0)}
       />
     )
   }
 
   return (
     <UploaderButton
-      methods={settings.transfer_methods}
+      methods={methods}
       onUpload={onUpload}
       disabled={disabled}
-      limit={+settings.image_file_size_limit!}
+      limit={+(settings?.image_file_size_limit ?? 0)}
     />
   )
 }

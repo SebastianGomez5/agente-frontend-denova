@@ -128,3 +128,28 @@ a {
   background-clip: text;
   text-fill-color: transparent;
 }
+
+.dark .markdown-body {
+  color: #f1f5f9 !important;
+  --color-fg-default: #f1f5f9;
+  --color-fg-muted: #94a3b8;
+  --color-border-default: #334155;
+  --color-canvas-subtle: #1e293b;
+}
+
+.dark .markdown-body p,
+.dark .markdown-body h1,
+.dark .markdown-body h2,
+.dark .markdown-body h3,
+.dark .markdown-body h4,
+.dark .markdown-body li,
+.dark .markdown-body strong,
+.dark .markdown-body span,
+.dark .markdown-body table {
+  color: #f1f5f9;
+}
+
+.dark .markdown-body code:not(pre code) {
+  background-color: #1e293b;
+  color: #38bdf8;
+}

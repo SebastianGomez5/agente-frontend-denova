@@ -27,8 +27,8 @@ import { useToastContext } from '@/app/components/base/toast'
 import { TransferMethod } from '@/types/app'
 import { formatFileSize } from '@/utils/format'
 
-const uploadRemoteFileInfo = () => {
-  console.log('TODO')
+const uploadRemoteFileInfo = async (_url?: string, _isToken?: boolean): Promise<any> => {
+  return {}
 }
 
 export const useFileSizeLimit = (fileUploadConfig?: FileUploadConfigResponse) => {

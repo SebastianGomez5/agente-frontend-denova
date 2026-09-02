@@ -185,7 +185,7 @@ const Chat: FC<IChatProps> = ({
                       <ChatImageUploader
                         settings={visionConfig}
                         onUpload={onUpload}
-                        disabled={files.length >= visionConfig.number_limits}
+                        disabled={files.length >= (visionConfig.number_limits ?? 2)}
                       />
                       <div className='mx-1 w-[1px] h-4 bg-black/5' />
                     </div>
