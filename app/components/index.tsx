@@ -464,7 +464,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
 
     let tempNewConversationId = ''
     let hasSetResponseId = false
-    let isAgentMode = false
+    const isAgentMode = false
 
     const sendData = {
       inputs: {},
@@ -475,14 +475,8 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
 
     sendChatMessage(sendData, {
       onData: (chunk: string, isFirstMessage: boolean, { conversationId: newConvId, messageId }: any) => {
-        if (!isAgentMode) {
-          responseItem.content += chunk
-        } else {
-          const lastThought = responseItem.agent_thoughts?.[responseItem.agent_thoughts?.length - 1]
-          if (lastThought) {
-            lastThought.thought += chunk
-          }
-        }
+        responseItem.content += chunk
+
         if (messageId && !hasSetResponseId) {
           responseItem.id = messageId
           hasSetResponseId = true
@@ -501,7 +495,6 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
         setChatList(newList)
       },
       onThought: (thought: any) => {
-        isAgentMode = true
         if (thought.message_id && !hasSetResponseId) {
           responseItem.id = thought.message_id
           hasSetResponseId = true
@@ -525,6 +518,19 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
           },
         )
         setChatList(newList)
+      },
+      onMessageReplace: (messageReplace: any) => {
+        if (messageReplace?.answer) {
+          responseItem.content = messageReplace.answer
+          const newList = produce(
+            getChatList().filter(item => item.id !== responseItem.id && item.id !== placeholderAnswerId),
+            (draft) => {
+              if (!draft.find(item => item.id === questionId)) { draft.push(questionItem) }
+              draft.push({ ...responseItem })
+            },
+          )
+          setChatList(newList)
+        }
       },
       onCompleted: async (hasError?: boolean) => {
         if (!hasError && tempNewConversationId) {
@@ -560,7 +566,6 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
       getAbortController: () => {},
       onFile: () => {},
       onMessageEnd: () => {},
-      onMessageReplace: () => {},
       onWorkflowStarted: () => {},
       onNodeStarted: () => {},
       onNodeFinished: () => {},
@@ -824,7 +829,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                 <div className="flex flex-col space-y-2 max-w-[88%] sm:max-w-[80%]">
 
                   {/* Pensamiento Agéntico */}
-                  {lastThought && (
+                  {lastThought && lastThought.trim() && lastThought.trim() !== msg.content?.trim() && (
                     <div className={`text-[11px] font-mono px-3 py-1.5 rounded-lg border flex items-center gap-2 select-text ${
                       darkMode ? 'bg-slate-900/90 border-slate-800 text-slate-400' : 'bg-blue-50/60 border-blue-100 text-[#0052B4]'
                     }`}>
