@@ -28,6 +28,8 @@ import {
   Calendar,
   Activity,
   Droplet,
+  Square,
+  UploadCloud,
 } from 'lucide-react'
 import produce, { setAutoFreeze } from 'immer'
 import { useGetState } from 'ahooks'
@@ -54,8 +56,15 @@ export interface IMainProps {
 export default function AmyetChatApp({ params }: IMainProps = {}) {
   // --- Estados de Tema y UI ---
   const [darkMode, setDarkMode] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Adaptar apertura de sidebar según tamaño de pantalla inicial
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+      setSidebarOpen(true)
+    }
+  }, [])
 
   // --- Modales y Overlays ---
   const [showSettings, setShowSettings] = useState(false)
@@ -157,15 +166,58 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
 
   // --- Estados de Entrada y Voz ---
   const [inputText, setInputText] = useState('')
-  const [attachedFiles, setAttachedFiles] = useState<{ id?: string, name: string, type: string, file?: File, url?: string }[]>([])
+  const [attachedFiles, setAttachedFiles] = useState<{ id?: string, name: string, type: string, file?: File, url?: string, uploading?: boolean }[]>([])
   const [isRecordingAudio, setIsRecordingAudio] = useState(false)
   const [isSpeakingMessageId, setIsSpeakingMessageId] = useState<string | null>(null)
   const [urlInput, setUrlInput] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
+  const [isDragging, setIsDragging] = useState(false)
+  const dragCounterRef = useRef(0)
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const recognitionRef = useRef<any>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  // Handlers para Arrastrar y Soltar archivos (Drag & Drop)
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current += 1
+    if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true)
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current -= 1
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0
+      setIsDragging(false)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    dragCounterRef.current = 0
+
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      const droppedFiles = Array.from(e.dataTransfer.files)
+      droppedFiles.forEach(handleFileUpload)
+      e.dataTransfer.clearData()
+      Toast.notify({ type: 'success', message: `${droppedFiles.length} archivo(s) añadido(s) a la consulta.` })
+    }
+  }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -388,12 +440,28 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
     }
   }
 
+  const getFileType = (fileName: string, mimeType: string = '') => {
+    const ext = (fileName.split('.').pop() || '').toUpperCase()
+    const imageExts = ['JPG', 'JPEG', 'PNG', 'GIF', 'WEBP', 'SVG']
+    const docExts = ['TXT', 'MD', 'MDX', 'MARKDOWN', 'PDF', 'HTML', 'XLSX', 'XLS', 'DOC', 'DOCX', 'CSV', 'EML', 'MSG', 'PPTX', 'PPT', 'XML', 'EPUB']
+    const audioExts = ['MP3', 'M4A', 'WAV', 'AMR', 'MPGA']
+    const videoExts = ['MP4', 'MOV', 'MPEG', 'WEBM']
+
+    if (imageExts.includes(ext) || mimeType.startsWith('image/')) { return 'image' }
+    if (docExts.includes(ext) || mimeType.includes('pdf') || mimeType.includes('text') || mimeType.includes('officedocument') || mimeType.includes('msword')) { return 'document' }
+    if (audioExts.includes(ext) || mimeType.startsWith('audio/')) { return 'audio' }
+    if (videoExts.includes(ext) || mimeType.startsWith('video/')) { return 'video' }
+    return 'document'
+  }
+
   // --- Subir archivos a Dify ---
   const handleFileUpload = async (file: File) => {
+    const detectedType = getFileType(file.name, file.type)
     const tempFile = {
       name: file.name,
-      type: file.type.startsWith('image/') ? 'image' : 'doc',
+      type: detectedType,
       file,
+      uploading: true,
     }
     setAttachedFiles(prev => [...prev, tempFile])
 
@@ -405,14 +473,32 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
       data: formData,
       onprogress: () => {},
     })
-      .then((res: { id: string }) => {
+      .then((res: any) => {
+        let parsedId = res?.id || res?.upload_file_id || res
+        if (typeof parsedId === 'string' && parsedId.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(parsedId)
+            parsedId = parsed.id || parsedId
+          } catch (e) {}
+        }
         setAttachedFiles(prev =>
-          prev.map(f => (f.name === file.name ? { ...f, id: res.id } : f)),
+          prev.map(f => (f.name === file.name ? { ...f, id: parsedId, uploading: false } : f)),
         )
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('Error uploading file:', err)
         Toast.notify({ type: 'error', message: 'Error al subir archivo a Dify' })
+        setAttachedFiles(prev => prev.filter(f => f.name !== file.name))
       })
+  }
+
+  // --- Detener consulta activa ---
+  const handleStopResponding = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    setIsResponding(false)
   }
 
   // --- Enviar mensaje a Dify Agent ---
@@ -420,18 +506,37 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
     const textToSend = customText || inputText
     if ((!textToSend.trim() && attachedFiles.length === 0) || isResponding) { return }
 
+    if (attachedFiles.some(f => f.uploading)) {
+      Toast.notify({ type: 'warning', message: 'Por favor, espera a que el archivo termine de subirse.' })
+      return
+    }
+
     const messageQuery = textToSend.trim()
     setInputText('')
 
     // Preparar archivos para Dify
     const filesToSend: VisionFile[] = attachedFiles
-      .filter((f): f is typeof f & { id: string } => !!f.id)
-      .map(f => ({
-        type: 'image',
-        transfer_method: TransferMethod.local_file,
-        url: '',
-        upload_file_id: f.id,
-      }))
+      .map((f) => {
+        if (f.type === 'url' && f.url) {
+          return {
+            type: 'document',
+            transfer_method: TransferMethod.remote_url,
+            url: f.url,
+            upload_file_id: '',
+          }
+        }
+        if (f.id) {
+          const detectedType = getFileType(f.name, f.file?.type || '')
+          return {
+            type: detectedType as any,
+            transfer_method: TransferMethod.local_file,
+            url: '',
+            upload_file_id: f.id,
+          }
+        }
+        return null
+      })
+      .filter((f): f is VisionFile => !!f)
 
     const currentFiles = [...attachedFiles]
     setAttachedFiles([])
@@ -442,6 +547,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
       id: questionId,
       content: messageQuery,
       isAnswer: false,
+      message_files: filesToSend,
     }
 
     // Placeholder de respuesta del asistente
@@ -474,6 +580,9 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
     }
 
     sendChatMessage(sendData, {
+      getAbortController: (abortCtrl) => {
+        abortControllerRef.current = abortCtrl
+      },
       onData: (chunk: string, isFirstMessage: boolean, { conversationId: newConvId, messageId }: any) => {
         responseItem.content += chunk
 
@@ -533,6 +642,8 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
         }
       },
       onCompleted: async (hasError?: boolean) => {
+        setIsResponding(false)
+        abortControllerRef.current = null
         if (!hasError && tempNewConversationId) {
           try {
             const { data: allConversations }: any = await fetchConversations()
@@ -548,7 +659,6 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
           }
           setCurrConversationId(tempNewConversationId, APP_ID, true)
         }
-        setIsResponding(false)
 
         // Si el modo orbe o voz está activo, leer la respuesta en voz alta
         if (showVoiceOrb && responseItem.content) {
@@ -557,13 +667,13 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
       },
       onError: (err: any) => {
         setIsResponding(false)
+        abortControllerRef.current = null
         setChatList(produce(getChatList(), (draft) => {
           const pIdx = draft.findIndex(item => item.id === placeholderAnswerId)
           if (pIdx > -1) { draft.splice(pIdx, 1) }
         }))
         Toast.notify({ type: 'error', message: 'Error en la respuesta del agente' })
       },
-      getAbortController: () => {},
       onFile: () => {},
       onMessageEnd: () => {},
       onWorkflowStarted: () => {},
@@ -572,6 +682,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
       onWorkflowFinished: () => {},
     }).catch((e) => {
       setIsResponding(false)
+      abortControllerRef.current = null
       // Fallback local simulación si el servidor de Dify está offline
       setTimeout(() => {
         const assistantMessage: ChatItem = {
@@ -598,75 +709,98 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
   }, [conversationList, currConversationId, isNewConversation, currConversationInfo])
 
   return (
-    <div className={`flex h-screen w-full select-text overflow-hidden font-sans transition-colors duration-300 ${
+    <div className={`flex h-screen w-full select-text overflow-hidden font-sans transition-colors duration-300 relative ${
       darkMode ? 'dark bg-[#070C16] text-slate-100' : 'bg-[#F4F7FC] text-slate-900'
     }`}>
 
       {/* ========================================================= */}
+      {/* TELÓN DE FONDO (BACKDROP) PARA MÓVIL                      */}
+      {/* ========================================================= */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs md:hidden transition-opacity duration-300"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* ========================================================= */}
       {/* SIDEBAR: MENÚ CLÍNICO Y CONSULTAS ANTERIORES             */}
       {/* ========================================================= */}
-      <aside className={`relative flex flex-col border-r transition-all duration-300 ease-in-out select-none ${
-        sidebarOpen ? 'w-80' : 'w-0 -translate-x-full md:w-20 md:translate-x-0'
-      } ${
-        darkMode ? 'border-slate-800/80 bg-[#0B1325]/95' : 'border-[#E1E8F5] bg-white'
-      }`}>
+      <aside className={`
+        fixed md:relative inset-y-0 left-0 z-50 flex flex-col border-r transition-all duration-300 ease-in-out select-none
+        ${sidebarOpen
+      ? 'w-72 sm:w-80 translate-x-0'
+      : '-translate-x-full md:translate-x-0 md:w-0 md:border-r-0 md:overflow-hidden'
+    }
+        ${darkMode ? 'border-slate-800/80 bg-[#0B1325]/95' : 'border-[#E1E8F5] bg-white'}
+        shadow-2xl md:shadow-none
+      `}>
 
         {/* Encabezado de Marca Denova & Amyet */}
-        <div className="flex h-20 items-center justify-between px-5 border-b border-inherit">
+        <div className="flex h-16 sm:h-20 items-center justify-between px-4 sm:px-5 border-b border-inherit">
           <div className="flex items-center gap-3 overflow-hidden">
             {/* Logo Estilizado Denova / Amyet */}
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white dark:bg-[#0B1325] border border-blue-200 dark:border-slate-700 shadow-md shadow-[#0062D2]/25 overflow-hidden p-0.5">
+            <div className="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-2xl bg-white dark:bg-[#0B1325] border border-blue-200 dark:border-slate-700 shadow-md shadow-[#0062D2]/25 overflow-hidden p-0.5">
               <img src="/images/amyet-bot.png" alt="Amyet IA" className="h-full w-full object-contain" />
             </div>
-            {sidebarOpen && (
-              <div className="flex flex-col truncate">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-bold tracking-tight text-[#0062D2] dark:text-[#38BDF8]">Amyet IA</span>
-                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-100 dark:bg-blue-950 text-[#0052B4] dark:text-blue-300 font-semibold">PRO</span>
-                </div>
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate">Denova Pharmaceutical</span>
+            <div className="flex flex-col truncate">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-bold tracking-tight text-[#0062D2] dark:text-[#38BDF8]">Amyet IA</span>
+                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-100 dark:bg-blue-950 text-[#0052B4] dark:text-blue-300 font-semibold">PRO</span>
               </div>
-            )}
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate">Denova Pharmaceutical</span>
+            </div>
           </div>
+
+          {/* Botón Cerrar Sidebar en Móvil */}
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="md:hidden p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         {/* Botón Nueva Consulta */}
-        <div className="p-3.5">
+        <div className="p-3 sm:p-3.5">
           <button
-            onClick={() => createNewChat()}
+            onClick={() => {
+              createNewChat()
+              if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                setSidebarOpen(false)
+              }
+            }}
             className={`w-full flex items-center justify-center gap-2 rounded-xl py-2.5 px-3 text-xs font-semibold tracking-wide transition-all shadow-sm ${
               darkMode
                 ? 'bg-[#0062D2] hover:bg-[#0052B4] text-white shadow-blue-900/30'
                 : 'bg-[#0062D2] hover:bg-[#0052B4] text-white shadow-[#0062D2]/20'
             }`}
           >
-            <Plus className="h-4 w-4" />
-            {sidebarOpen && <span>Nueva Consulta Clínica</span>}
+            <Plus className="h-4 w-4 shrink-0" />
+            <span>Nueva Consulta Clínica</span>
           </button>
         </div>
 
         {/* Buscador de Protocolos */}
-        {sidebarOpen && (
-          <div className="px-3.5 pb-2">
-            <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs border ${
-              darkMode
-                ? 'bg-slate-900/70 border-slate-800 text-slate-400'
-                : 'bg-[#F8FAFC] border-slate-200 text-slate-500'
-            }`}>
-              <Search className="h-3.5 w-3.5" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Buscar protocolos, clientes..."
-                className="w-full bg-transparent outline-none placeholder:text-inherit"
-              />
-            </div>
+        <div className="px-3 sm:px-3.5 pb-2">
+          <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs border ${
+            darkMode
+              ? 'bg-slate-900/70 border-slate-800 text-slate-400'
+              : 'bg-[#F8FAFC] border-slate-200 text-slate-500'
+          }`}>
+            <Search className="h-3.5 w-3.5 shrink-0" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Buscar protocolos, clientes..."
+              className="w-full bg-transparent outline-none placeholder:text-inherit"
+            />
           </div>
-        )}
+        </div>
 
         {/* Lista de Historial */}
-        <div className="flex-1 overflow-y-auto px-2 space-y-1 scrollbar-thin">
+        <div className="flex-1 overflow-y-auto px-2 space-y-1">
           {isNewConversation && (
             <div
               className={`group relative flex cursor-pointer items-center justify-between rounded-xl px-3.5 py-2.5 text-xs transition-all ${
@@ -677,7 +811,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
             >
               <div className="flex items-center gap-2.5 truncate">
                 <div className="h-2 w-2 rounded-full shrink-0 bg-[#0062D2] dark:bg-[#38BDF8]"></div>
-                {sidebarOpen && <span className="truncate">Nueva consulta</span>}
+                <span className="truncate">Nueva consulta</span>
               </div>
             </div>
           )}
@@ -689,7 +823,12 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
               return (
                 <div
                   key={chat.id}
-                  onClick={() => setCurrConversationId(chat.id, APP_ID, false)}
+                  onClick={() => {
+                    setCurrConversationId(chat.id, APP_ID, false)
+                    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                      setSidebarOpen(false)
+                    }
+                  }}
                   className={`group relative flex cursor-pointer items-center justify-between rounded-xl px-3.5 py-2.5 text-xs transition-all ${
                     isActive
                       ? darkMode
@@ -702,96 +841,121 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                 >
                   <div className="flex items-center gap-2.5 truncate">
                     <div className={`h-2 w-2 rounded-full shrink-0 ${isActive ? 'bg-[#0062D2] dark:bg-[#38BDF8]' : 'bg-slate-400'}`}></div>
-                    {sidebarOpen && <span className="truncate">{chat.name || 'Consulta clínica'}</span>}
+                    <span className="truncate">{chat.name || 'Consulta clínica'}</span>
                   </div>
 
-                  {sidebarOpen && (
-                    <button
-                      onClick={e => handleDeleteConversation(e, chat.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-500 transition-opacity"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+                  <button
+                    onClick={e => handleDeleteConversation(e, chat.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-500 transition-opacity"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               )
             })}
         </div>
 
         {/* Footer del Sidebar: Perfil de Cabina */}
-        <div className={`p-3.5 border-t border-inherit flex items-center justify-between ${
+        <div className={`p-3 sm:p-3.5 border-t border-inherit flex items-center justify-between ${
           darkMode ? 'bg-[#080E1C]' : 'bg-[#F8FAFC]'
         }`}>
-          <div className="flex items-center gap-2.5">
-            <div className="relative">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="relative shrink-0">
               <div className="h-9 w-9 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center border border-slate-200 dark:border-slate-700 overflow-hidden p-0.5 shadow-sm">
                 <img src="/images/user-avatar.png" alt="Perfil" className="h-full w-full object-contain" />
               </div>
               <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900"></span>
             </div>
-            {sidebarOpen && (
-              <div className="flex flex-col">
-                <span className="text-xs font-semibold truncate">{config.clinicName}</span>
-                <span className="text-[10px] text-slate-500 truncate">Profesional Verificado</span>
-              </div>
-            )}
+            <div className="flex flex-col truncate">
+              <span className="text-xs font-semibold truncate">{config.clinicName}</span>
+              <span className="text-[10px] text-slate-500 truncate">Profesional Verificado</span>
+            </div>
           </div>
 
-          {sidebarOpen && (
-            <button
-              onClick={() => setShowSettings(true)}
-              className={`p-2 rounded-lg transition-colors ${
-                darkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-200 text-slate-600'
-              }`}
-              title="Configuración"
-            >
-              <Settings className="h-4 w-4" />
-            </button>
-          )}
+          <button
+            onClick={() => setShowSettings(true)}
+            className={`p-2 rounded-lg transition-colors shrink-0 ${
+              darkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-200 text-slate-600'
+            }`}
+            title="Configuración"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
         </div>
       </aside>
 
       {/* ========================================================= */}
       {/* CANVAS CENTRAL: ÁREA DE TRABAJO DERMOCOSMÉTICA            */}
       {/* ========================================================= */}
-      <main className="flex flex-1 flex-col h-full min-w-0 relative overflow-hidden">
+      <main
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className="flex flex-1 flex-col h-full min-w-0 relative overflow-hidden"
+      >
+
+        {/* ========================================================= */}
+        {/* DROPZONE OVERLAY FLOTANTE (ARRASTRAR Y SOLTAR)            */}
+        {/* ========================================================= */}
+        {isDragging && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-[#0062D2]/10 backdrop-blur-md border-2 border-dashed border-[#0062D2] dark:border-[#38BDF8] rounded-3xl m-3 pointer-events-none transition-all">
+            <div className="flex flex-col items-center justify-center p-8 text-center rounded-3xl bg-white/95 dark:bg-[#0B1325]/95 shadow-2xl border border-blue-200 dark:border-slate-700 max-w-md pointer-events-none">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 dark:bg-blue-950/80 text-[#0062D2] dark:text-[#38BDF8] mb-4 animate-bounce">
+                <UploadCloud className="h-8 w-8" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Suelta tus archivos aquí
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+                Amyet IA analizará protocolos, documentos técnicos, imágenes clínicas o fichas de Denova automáticamente.
+              </p>
+              <div className="flex items-center gap-1.5 mt-3 text-[10px] font-mono text-[#0062D2] dark:text-[#38BDF8] bg-blue-50 dark:bg-blue-950/50 px-2.5 py-1 rounded-full border border-blue-200 dark:border-blue-900">
+                <FileText className="h-3 w-3" />
+                <span>PDF, Word, Excel, JPG, PNG soportados</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Header Superior */}
-        <header className={`flex h-16 items-center justify-between px-6 border-b z-10 backdrop-blur-md transition-colors select-none ${
+        <header className={`flex h-14 sm:h-16 items-center justify-between px-3 sm:px-6 border-b z-10 backdrop-blur-md transition-colors select-none ${
           darkMode ? 'border-slate-800/80 bg-[#070C16]/85' : 'border-[#E1E8F5] bg-white/90'
         }`}>
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className={`p-2 rounded-xl border transition-colors ${
+              className={`p-2 rounded-xl border transition-colors shrink-0 ${
                 darkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-400' : 'border-slate-200 hover:bg-slate-100 text-slate-600'
               }`}
+              title="Menú lateral"
             >
               <Sliders className="h-4 w-4" />
             </button>
 
             <div className="flex flex-col min-w-0">
-              <h2 className="text-xs sm:text-sm font-bold truncate flex items-center gap-2">
-                <span>{currentTitle}</span>
-                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-500/10 text-[#0062D2] dark:text-[#38BDF8] border border-blue-500/20">
+              <h2 className="text-xs sm:text-sm font-bold truncate flex items-center gap-1.5 sm:gap-2">
+                <span className="truncate">{currentTitle}</span>
+                <span className="shrink-0 text-[9px] sm:text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-500/10 text-[#0062D2] dark:text-[#38BDF8] border border-blue-500/20">
                   {selectedSkill.badge}
                 </span>
               </h2>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate hidden sm:block">
                 Denova Vademécum • Soluciones Dermocosméticas de Alta Gama
               </span>
             </div>
           </div>
 
           {/* Acciones del Header */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {/* Botón Manos Libres en Cabina */}
             <button
               onClick={() => setShowVoiceOrb(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r from-[#0062D2] to-[#00B4D8] text-white hover:opacity-95 transition-all shadow-md shadow-[#0062D2]/20"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r from-[#0062D2] to-[#00B4D8] text-white hover:opacity-95 transition-all shadow-md shadow-[#0062D2]/20"
+              title="Modo Manos Libres"
             >
-              <Headphones className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Modo Manos Libres</span>
+              <Headphones className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden md:inline">Modo Manos Libres</span>
             </button>
 
             {/* Alternador Claro / Oscuro */}
@@ -810,18 +974,18 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
         {/* ========================================================= */}
         {/* FEED DE MENSAJES Y RESPUESTAS TÉCNICAS                    */}
         {/* ========================================================= */}
-        <div className="flex-1 overflow-y-auto px-4 md:px-12 py-6 space-y-6 scrollbar-thin select-text">
+        <div className="flex-1 overflow-y-auto px-3 sm:px-6 md:px-12 py-4 sm:py-6 space-y-4 sm:space-y-6 select-text">
           {chatList.map((msg, index) => {
             const isUser = !msg.isAnswer
             const isSpeaking = isSpeakingMessageId === msg.id
             const lastThought = msg.agent_thoughts?.[msg.agent_thoughts.length - 1]?.thought
 
             return (
-              <div key={msg.id || index} className={`flex gap-3.5 max-w-4xl mx-auto ${isUser ? 'justify-end' : 'justify-start'}`}>
+              <div key={msg.id || index} className={`flex gap-2.5 sm:gap-3.5 max-w-4xl mx-auto ${isUser ? 'justify-end' : 'justify-start'}`}>
 
                 {/* Avatar Asistente Amyet */}
                 {!isUser && (
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white dark:bg-[#0F182B] border border-blue-200 dark:border-slate-700 shadow-md shadow-[#0062D2]/20 overflow-hidden p-0.5">
+                  <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white dark:bg-[#0F182B] border border-blue-200 dark:border-slate-700 shadow-md shadow-[#0062D2]/20 overflow-hidden p-0.5">
                     <img src="/images/amyet-bot.png" alt="Amyet Bot" className="h-full w-full object-contain" />
                   </div>
                 )}
@@ -839,7 +1003,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                   )}
 
                   {/* Burbuja de Mensaje */}
-                  <div className={`relative px-4 py-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed select-text ${
+                  <div className={`relative px-3.5 py-3 sm:px-4 sm:py-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed select-text ${
                     isUser
                       ? 'bg-[#0062D2] !text-white rounded-tr-xs shadow-md shadow-[#0062D2]/15'
                       : darkMode
@@ -849,9 +1013,23 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
 
                     {isUser
                       ? (
-                        <div className="whitespace-pre-wrap font-normal text-white select-text">
-                          {msg.content}
-                        </div>
+                        <>
+                          {msg.message_files && msg.message_files.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-2 select-none">
+                              {msg.message_files.map((file, fIdx) => (
+                                <div key={fIdx} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/20 text-white text-xs font-mono">
+                                  <FileText className="h-3.5 w-3.5" />
+                                  <span className="truncate max-w-[180px]">
+                                    {file.type === 'document' ? 'Documento adjunto' : 'Archivo adjunto'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="whitespace-pre-wrap font-normal text-white select-text">
+                            {msg.content}
+                          </div>
+                        </>
                       )
                       : msg.content
                         ? (
@@ -862,7 +1040,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                         : (
                           <div className="flex items-center gap-2 py-1">
                             <RefreshCw className="h-3.5 w-3.5 animate-spin text-[#0062D2]" />
-                            <span className="text-xs text-slate-400">Generando respuesta clínica...</span>
+                            <span className="text-xs text-slate-400">Analizando formulaciones y generando respuesta clínica...</span>
                           </div>
                         )}
 
@@ -900,7 +1078,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                           }`}
                         >
                           {isSpeaking ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
-                          <span>{isSpeaking ? 'Silenciar' : 'Escuchar Protocolo'}</span>
+                          <span>{isSpeaking ? 'Silenciar' : 'Escuchar'}</span>
                         </button>
                         <span>•</span>
                         <button
@@ -917,7 +1095,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
 
                 {/* Avatar del Usuario / Doctor */}
                 {isUser && (
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden p-0.5">
+                  <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden p-0.5">
                     <img src="/images/user-avatar.png" alt="Usuario" className="h-full w-full object-contain" />
                   </div>
                 )}
@@ -925,28 +1103,13 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
             )
           })}
 
-          {/* Loader */}
-          {isResponding && (
-            <div className="flex gap-3 max-w-4xl mx-auto justify-start">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white dark:bg-[#0F182B] border border-blue-200 dark:border-slate-700 shadow-md shadow-[#0062D2]/20 overflow-hidden p-0.5">
-                <img src="/images/amyet-bot.png" alt="Amyet Bot" className="h-full w-full object-contain animate-pulse" />
-              </div>
-              <div className={`flex items-center gap-2 px-4 py-3 rounded-2xl text-xs font-mono border ${
-                darkMode ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-white border-blue-100 text-slate-600'
-              }`}>
-                <RefreshCw className="h-3.5 w-3.5 animate-spin text-[#0062D2]" />
-                <span>Analizando formulaciones y stock en Denova España...</span>
-              </div>
-            </div>
-          )}
-
           <div ref={messagesEndRef} />
         </div>
 
         {/* ========================================================= */}
         {/* CENTRO DE MANDO: INPUT DOCK CON BRANDING DENOVA           */}
         {/* ========================================================= */}
-        <div className="p-4 md:px-12 md:pb-6 z-10">
+        <div className="p-2 sm:p-4 md:px-12 md:pb-6 z-10">
           <div className={`relative max-w-4xl mx-auto rounded-2xl border shadow-xl backdrop-blur-xl transition-all ${
             darkMode
               ? 'bg-[#0C1425]/90 border-slate-800 focus-within:border-[#0062D2] shadow-black/40'
@@ -955,7 +1118,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
 
             {/* Chips de Archivos Adjuntos */}
             {attachedFiles.length > 0 && (
-              <div className="flex flex-wrap gap-2 px-4 pt-3">
+              <div className="flex flex-wrap gap-2 px-3 sm:px-4 pt-2.5 sm:pt-3">
                 {attachedFiles.map((file, index) => (
                   <div
                     key={index}
@@ -963,8 +1126,18 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                       darkMode ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-blue-50 border-blue-200 text-[#0052B4]'
                     }`}
                   >
-                    {file.type === 'url' ? <Globe className="h-3 w-3 text-cyan-500" /> : <FileText className="h-3 w-3 text-[#0062D2]" />}
-                    <span className="max-w-[150px] truncate">{file.name}</span>
+                    {file.uploading
+                      ? (
+                        <RefreshCw className="h-3 w-3 animate-spin text-[#0062D2]" />
+                      )
+                      : file.type === 'url'
+                        ? (
+                          <Globe className="h-3 w-3 text-cyan-500" />
+                        )
+                        : (
+                          <FileText className="h-3 w-3 text-[#0062D2]" />
+                        )}
+                    <span className="max-w-[120px] sm:max-w-[150px] truncate">{file.name}</span>
                     <button
                       onClick={() => setAttachedFiles(attachedFiles.filter((_, i) => i !== index))}
                       className="hover:text-rose-500"
@@ -977,27 +1150,27 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
             )}
 
             {/* Barra de Selección de Habilidades y Marca */}
-            <div className="flex items-center justify-between px-4 pt-2.5 text-xs border-b border-inherit pb-2">
+            <div className="flex items-center justify-between px-3 sm:px-4 pt-2 sm:pt-2.5 text-xs border-b border-inherit pb-2 gap-2">
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 {/* Selector de Habilidad */}
                 <div className="relative">
                   <button
                     onClick={() => setShowSkillDropdown(!showSkillDropdown)}
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-xl font-medium transition-all border ${
+                    className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-xl font-medium transition-all border max-w-[180px] sm:max-w-none ${
                       darkMode
                         ? 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-700'
                         : 'bg-slate-50 hover:bg-blue-50 text-slate-800 border-slate-200'
                     }`}
                   >
-                    <selectedSkill.icon className="h-3.5 w-3.5 text-[#0062D2] dark:text-[#38BDF8]" />
-                    <span className="font-semibold">{selectedSkill.name}</span>
-                    <ChevronDown className="h-3 w-3 opacity-60" />
+                    <selectedSkill.icon className="h-3.5 w-3.5 text-[#0062D2] dark:text-[#38BDF8] shrink-0" />
+                    <span className="font-semibold truncate text-[11px] sm:text-xs">{selectedSkill.name}</span>
+                    <ChevronDown className="h-3 w-3 opacity-60 shrink-0" />
                   </button>
 
                   {/* Dropdown de Habilidades */}
                   {showSkillDropdown && (
-                    <div className={`absolute bottom-full mb-2 left-0 w-80 rounded-2xl border p-2 shadow-2xl z-50 ${
+                    <div className={`absolute bottom-full mb-2 left-0 w-[calc(100vw-2.5rem)] sm:w-80 max-w-xs sm:max-w-sm rounded-2xl border p-2 shadow-2xl z-50 ${
                       darkMode ? 'bg-[#0A101D] border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
                     }`}>
                       <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
@@ -1033,22 +1206,23 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                 {/* Botón Acceso Rápido a Plantillas de Documentos */}
                 <button
                   onClick={() => setShowDocModal(true)}
-                  className="hidden sm:flex items-center gap-1 text-[11px] font-medium text-[#0062D2] dark:text-[#38BDF8] hover:underline"
+                  className="hidden sm:flex items-center gap-1 text-[11px] font-medium text-[#0062D2] dark:text-[#38BDF8] hover:underline shrink-0"
                 >
                   <FileText className="h-3 w-3" />
-                  <span>3 Tipos de Documentos</span>
+                  <span>Plantillas</span>
                 </button>
               </div>
 
               {/* Branding de Conexión */}
-              <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
+              <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 shrink-0">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Conexión Amyet IA / Studio</span>
+                <span className="hidden sm:inline">Conexión Amyet IA / Studio</span>
+                <span className="sm:hidden">Online</span>
               </div>
             </div>
 
             {/* Input de Texto y Controles */}
-            <form onSubmit={(e) => { e.preventDefault(); handleSendMessage() }} className="p-3 pt-2">
+            <form onSubmit={(e) => { e.preventDefault(); handleSendMessage() }} className="p-2.5 sm:p-3 pt-2">
               <textarea
                 ref={textareaRef}
                 value={inputText}
@@ -1061,11 +1235,11 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                 }}
                 rows={2}
                 placeholder={isRecordingAudio ? 'Dictando a Amyet IA... (habla con normalidad)' : 'Escribe una consulta sobre formulación, protocolos o pedidos Denova...'}
-                className="w-full resize-none bg-transparent px-1 py-1 text-xs sm:text-sm outline-none placeholder:text-slate-400 font-normal leading-relaxed"
+                className="w-full resize-none bg-transparent px-1 py-1 text-xs sm:text-sm outline-none placeholder:text-slate-400 font-normal leading-relaxed min-h-[44px]"
               />
 
               <div className="flex items-center justify-between pt-2 border-t border-inherit">
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0.5 sm:gap-1">
 
                   {/* Adjuntar Ficha o Imagen */}
                   <label className={`cursor-pointer p-2 rounded-xl transition-colors ${
@@ -1110,21 +1284,47 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                   >
                     {isRecordingAudio ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                   </button>
+
+                  {/* Botón Plantillas para móvil */}
+                  <button
+                    type="button"
+                    onClick={() => setShowDocModal(true)}
+                    className={`sm:hidden p-2 rounded-xl transition-colors ${
+                      darkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-blue-50 text-slate-600'
+                    }`}
+                    title="Plantillas de Documentos"
+                  >
+                    <FileText className="h-4 w-4 text-[#0062D2] dark:text-[#38BDF8]" />
+                  </button>
                 </div>
 
-                {/* Botón Enviar con estilo Denova */}
-                <button
-                  type="submit"
-                  disabled={(!inputText.trim() && attachedFiles.length === 0) || isResponding}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${
-                    (inputText.trim() || attachedFiles.length > 0) && !isResponding
-                      ? 'bg-[#0062D2] hover:bg-[#0052B4] text-white shadow-[#0062D2]/25'
-                      : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
-                  }`}
-                >
-                  <span>Consultar</span>
-                  <CornerDownLeft className="h-3 w-3" />
-                </button>
+                {/* Botón Enviar / Detener con estilo Denova */}
+                {isResponding
+                  ? (
+                    <button
+                      type="button"
+                      onClick={handleStopResponding}
+                      className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/25 cursor-pointer"
+                      title="Detener consulta"
+                    >
+                      <Square className="h-3 w-3 fill-white" />
+                      <span>Detener</span>
+                    </button>
+                  )
+                  : (
+                    <button
+                      type="submit"
+                      disabled={(!inputText.trim() && attachedFiles.length === 0) || attachedFiles.some(f => f.uploading)}
+                      className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${
+                        (inputText.trim() || attachedFiles.length > 0) && !attachedFiles.some(f => f.uploading)
+                          ? 'bg-[#0062D2] hover:bg-[#0052B4] text-white shadow-[#0062D2]/25'
+                          : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                      }`}
+                    >
+                      <span>Consultar</span>
+                      <CornerDownLeft className="h-3 w-3" />
+                    </button>
+                  )}
               </div>
             </form>
           </div>
@@ -1135,8 +1335,8 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
       {/* MODAL: 3 OPCIONES DEL GENERADOR DE DOCUMENTOS             */}
       {/* ========================================================= */}
       {showDocModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className={`relative w-full max-w-xl rounded-3xl p-6 border shadow-2xl ${
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4">
+          <div className={`relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-3xl p-4 sm:p-6 border shadow-2xl ${
             darkMode ? 'bg-[#0B1325] border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
           }`}>
             <div className="flex items-center justify-between pb-3 border-b border-inherit">
@@ -1182,8 +1382,8 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
       {/* MODAL: MODO MANOS LIBRES EN CABINA (ORBE AZUL DENOVA)     */}
       {/* ========================================================= */}
       {showVoiceOrb && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xl p-4">
-          <div className={`relative w-full max-w-md rounded-3xl p-8 text-center border shadow-2xl ${
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xl p-3 sm:p-4">
+          <div className={`relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-3xl p-5 sm:p-8 text-center border shadow-2xl ${
             darkMode ? 'bg-[#080F1E] border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
           }`}>
             <button
@@ -1191,30 +1391,30 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                 setShowVoiceOrb(false)
                 if (isRecordingAudio) { toggleSpeechRecognition() }
               }}
-              className="absolute top-5 right-5 p-2 rounded-full hover:bg-slate-800 text-slate-400"
+              className="absolute top-4 right-4 sm:top-5 sm:right-5 p-2 rounded-full hover:bg-slate-800 text-slate-400"
             >
               <X className="h-5 w-5" />
             </button>
 
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               <div>
                 <span className="text-[10px] font-mono uppercase tracking-widest text-[#00B4D8] font-bold">
                   Audio Bidireccional Activo
                 </span>
-                <h3 className="text-lg font-bold mt-1">Asistente de Cabina en Tiempo Real</h3>
+                <h3 className="text-base sm:text-lg font-bold mt-1">Asistente de Cabina en Tiempo Real</h3>
                 <p className="text-xs text-slate-400">Consulta protocolos mientras atiendes a tu paciente sin tocar la pantalla</p>
               </div>
 
               {/* Orbe Azul Cobalto y Cian */}
-              <div className="py-6 flex justify-center items-center">
+              <div className="py-4 sm:py-6 flex justify-center items-center">
                 <div className="relative flex items-center justify-center">
-                  <div className="absolute h-36 w-36 rounded-full bg-[#0062D2]/20 animate-ping"></div>
-                  <div className="absolute h-28 w-28 rounded-full bg-[#00B4D8]/30 animate-pulse"></div>
+                  <div className="absolute h-32 w-32 sm:h-36 sm:w-36 rounded-full bg-[#0062D2]/20 animate-ping"></div>
+                  <div className="absolute h-24 w-24 sm:h-28 sm:w-28 rounded-full bg-[#00B4D8]/30 animate-pulse"></div>
                   <button
                     onClick={toggleSpeechRecognition}
-                    className="h-20 w-20 rounded-full bg-gradient-to-tr from-[#0052B4] via-[#0062D2] to-[#00B4D8] flex items-center justify-center shadow-lg shadow-[#0062D2]/50 cursor-pointer"
+                    className="h-16 w-16 sm:h-20 sm:w-20 rounded-full bg-gradient-to-tr from-[#0052B4] via-[#0062D2] to-[#00B4D8] flex items-center justify-center shadow-lg shadow-[#0062D2]/50 cursor-pointer"
                   >
-                    <Radio className="h-8 w-8 text-white animate-bounce" />
+                    <Radio className="h-7 w-7 sm:h-8 sm:w-8 text-white animate-bounce" />
                   </button>
                 </div>
               </div>
@@ -1222,7 +1422,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
               <p className="text-xs font-medium text-slate-400 italic">
                 {isRecordingAudio
                   ? 'Amyet está escuchando... Di tu consulta ahora.'
-                  : '"Toca el orbe para hablar... Pregunta por cantidades, tiempos de exposición o incompatibilidad de activos."'}
+                  : '"Toca el orbe para hablar... Pregunta por formulaciones o incompatibilidades."'}
               </p>
 
               {inputText && (
@@ -1249,7 +1449,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                     setShowVoiceOrb(false)
                     if (isRecordingAudio) { toggleSpeechRecognition() }
                   }}
-                  className="px-6 py-2.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30"
+                  className="px-5 sm:px-6 py-2 sm:py-2.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30"
                 >
                   Finalizar Sesión de Cabina
                 </button>
@@ -1263,8 +1463,8 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
       {/* MODAL: INGESTA DE ENLACE WEB / FICHA ONLINE               */}
       {/* ========================================================= */}
       {showUrlModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className={`w-full max-w-md rounded-2xl p-6 border shadow-2xl ${
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4">
+          <div className={`w-full max-w-md rounded-2xl p-4 sm:p-6 border shadow-2xl ${
             darkMode ? 'bg-[#0B1325] border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
           }`}>
             <h3 className="text-xs font-bold flex items-center gap-2 text-[#0062D2]">
@@ -1306,8 +1506,8 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
       {/* MODAL: AJUSTES DE CLÍNICA Y SERVIDOR                      */}
       {/* ========================================================= */}
       {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
-          <div className={`relative w-full max-w-lg rounded-3xl p-6 border shadow-2xl ${
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-3 sm:p-4">
+          <div className={`relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-3xl p-4 sm:p-6 border shadow-2xl ${
             darkMode ? 'bg-[#0A101E] border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
           }`}>
             <div className="flex items-center justify-between pb-3 border-b border-inherit">

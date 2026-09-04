@@ -344,7 +344,14 @@ export const upload = (fetchOptions: any): Promise<any> => {
     xhr.withCredentials = true
     xhr.onreadystatechange = function () {
       if (xhr.readyState === 4) {
-        if (xhr.status === 200) { resolve({ id: xhr.response }) }
+        if (xhr.status === 200 || xhr.status === 201) {
+          try {
+            const data = typeof xhr.response === 'string' ? JSON.parse(xhr.response) : xhr.response
+            resolve(data)
+          } catch (e) {
+            resolve({ id: xhr.response })
+          }
+        }
         else { reject(xhr) }
       }
     }
@@ -368,10 +375,18 @@ export const ssePost = (
     onNodeStarted,
     onNodeFinished,
     onError,
+    getAbortController,
   }: IOtherOptions,
 ) => {
+  const controller = new AbortController()
+  const { signal } = controller
+  if (getAbortController) {
+    getAbortController(controller)
+  }
+
   const options = Object.assign({}, baseOptions, {
     method: 'POST',
+    signal,
   }, fetchOptions)
 
   const urlPrefix = API_PREFIX
@@ -403,7 +418,11 @@ export const ssePost = (
       }, onThought, onMessageEnd, onMessageReplace, onFile, onWorkflowStarted, onWorkflowFinished, onNodeStarted, onNodeFinished)
     })
     .catch((e) => {
-      Toast.notify({ type: 'error', message: e })
+      if (e.name === 'AbortError' || e.message?.includes('aborted')) {
+        onCompleted?.()
+        return
+      }
+      Toast.notify({ type: 'error', message: e.message || 'Error en la conexión' })
       onError?.(e)
     })
 }
