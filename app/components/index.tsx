@@ -6,7 +6,6 @@ import {
   MicOff,
   Paperclip,
   Globe,
-  Settings,
   Moon,
   Sun,
   Plus,
@@ -22,7 +21,6 @@ import {
   FileText,
   Sliders,
   RefreshCw,
-  CornerDownLeft,
   Headphones,
   Package,
   Calendar,
@@ -30,6 +28,14 @@ import {
   Droplet,
   Square,
   UploadCloud,
+  Send,
+  Palette,
+  Camera,
+  User,
+  Sparkles,
+  SlidersHorizontal,
+  RotateCcw,
+  CheckCircle2,
 } from 'lucide-react'
 import produce, { setAutoFreeze } from 'immer'
 import { useGetState } from 'ahooks'
@@ -68,10 +74,151 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
 
   // --- Modales y Overlays ---
   const [showSettings, setShowSettings] = useState(false)
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'visual' | 'profile' | 'system'>('visual')
   const [showVoiceOrb, setShowVoiceOrb] = useState(false)
   const [showUrlModal, setShowUrlModal] = useState(false)
   const [showSkillDropdown, setShowSkillDropdown] = useState(false)
   const [showDocModal, setShowDocModal] = useState(false)
+
+  // --- Perfil de Usuario y Personalización ---
+  const [userProfile, setUserProfile] = useState({
+    name: 'Dra. Valentina Gómez',
+    role: 'Especialista en Cosmiatría',
+    avatar: '/images/user-avatar.png',
+  })
+
+  const [visualSettings, setVisualSettings] = useState({
+    accentColor: 'blue' as 'blue' | 'emerald' | 'purple' | 'rose' | 'amber',
+    fontSize: 'base' as 'sm' | 'base' | 'lg',
+    bubbleStyle: 'modern' as 'modern' | 'glass' | 'minimal',
+  })
+
+  // --- Paletas de Colores de Acento ---
+  const COLOR_THEMES = {
+    blue: {
+      id: 'blue',
+      name: 'Azul Denova',
+      color: '#0062D2',
+      accentClass: 'text-[#0062D2] dark:text-[#38BDF8]',
+      bgClass: 'bg-[#0062D2]',
+      bgHoverClass: 'hover:bg-[#0052B4]',
+      borderClass: 'border-[#0062D2]',
+      gradientClass: 'from-[#0062D2] to-[#00B4D8]',
+      ringClass: 'ring-[#0062D2]',
+      lightBg: 'bg-blue-50 dark:bg-blue-950/40 text-[#0062D2] dark:text-[#38BDF8]',
+      shadowClass: 'shadow-[#0062D2]/25',
+    },
+    emerald: {
+      id: 'emerald',
+      name: 'Esmeralda Spa',
+      color: '#059669',
+      accentClass: 'text-[#059669] dark:text-[#34D399]',
+      bgClass: 'bg-[#059669]',
+      bgHoverClass: 'hover:bg-[#047857]',
+      borderClass: 'border-[#059669]',
+      gradientClass: 'from-[#059669] to-[#10B981]',
+      ringClass: 'ring-[#059669]',
+      lightBg: 'bg-emerald-50 dark:bg-emerald-950/40 text-[#059669] dark:text-[#34D399]',
+      shadowClass: 'shadow-emerald-600/25',
+    },
+    purple: {
+      id: 'purple',
+      name: 'Violeta Estético',
+      color: '#7C3AED',
+      accentClass: 'text-[#7C3AED] dark:text-[#C084FC]',
+      bgClass: 'bg-[#7C3AED]',
+      bgHoverClass: 'hover:bg-[#6D28D9]',
+      borderClass: 'border-[#7C3AED]',
+      gradientClass: 'from-[#7C3AED] to-[#A855F7]',
+      ringClass: 'ring-[#7C3AED]',
+      lightBg: 'bg-purple-50 dark:bg-purple-950/40 text-[#7C3AED] dark:text-[#C084FC]',
+      shadowClass: 'shadow-purple-600/25',
+    },
+    rose: {
+      id: 'rose',
+      name: 'Rosa Glow',
+      color: '#E11D48',
+      accentClass: 'text-[#E11D48] dark:text-[#FB7185]',
+      bgClass: 'bg-[#E11D48]',
+      bgHoverClass: 'hover:bg-[#BE123C]',
+      borderClass: 'border-[#E11D48]',
+      gradientClass: 'from-[#E11D48] to-[#FB7185]',
+      ringClass: 'ring-[#E11D48]',
+      lightBg: 'bg-rose-50 dark:bg-rose-950/40 text-[#E11D48] dark:text-[#FB7185]',
+      shadowClass: 'shadow-rose-600/25',
+    },
+    amber: {
+      id: 'amber',
+      name: 'Oro Champagne',
+      color: '#D97706',
+      accentClass: 'text-[#D97706] dark:text-[#FBBF24]',
+      bgClass: 'bg-[#D97706]',
+      bgHoverClass: 'hover:bg-[#B45309]',
+      borderClass: 'border-[#D97706]',
+      gradientClass: 'from-[#D97706] to-[#F59E0B]',
+      ringClass: 'ring-[#D97706]',
+      lightBg: 'bg-amber-50 dark:bg-amber-950/40 text-[#D97706] dark:text-[#FBBF24]',
+      shadowClass: 'shadow-amber-600/25',
+    },
+  }
+
+  const currentTheme = COLOR_THEMES[visualSettings.accentColor] || COLOR_THEMES.blue
+
+  const PRESET_AVATARS = [
+    { id: 'default', name: 'Original', src: '/images/user-avatar.png' },
+    { id: 'doctor_f', name: 'Especialista', src: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&auto=format&fit=crop&q=80' },
+    { id: 'doctor_m', name: 'Dermatólogo', src: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=150&auto=format&fit=crop&q=80' },
+    { id: 'aesthetic', name: 'Cosmiatría', src: 'https://images.unsplash.com/photo-1594824813580-b749be9d4a45?w=150&auto=format&fit=crop&q=80' },
+    { id: 'denova', name: 'Denova', src: '/images/denova-logo.png' },
+  ]
+
+  // Cargar personalizaciones guardadas en localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedProfile = localStorage.getItem('denova_user_profile')
+        if (savedProfile) { setUserProfile(JSON.parse(savedProfile)) }
+        const savedVisuals = localStorage.getItem('denova_visual_settings')
+        if (savedVisuals) { setVisualSettings(JSON.parse(savedVisuals)) }
+        const savedConfig = localStorage.getItem('denova_config')
+        if (savedConfig) { setConfig(JSON.parse(savedConfig)) }
+      } catch (e) {
+        console.error('Error cargando preferencias de localStorage', e)
+      }
+    }
+  }, [])
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        Toast.notify({ type: 'warning', message: 'La imagen debe ser menor a 2MB' })
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          const updated = { ...userProfile, avatar: reader.result }
+          setUserProfile(updated)
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('denova_user_profile', JSON.stringify(updated))
+          }
+          Toast.notify({ type: 'success', message: 'Foto de perfil actualizada con éxito.' })
+        }
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleSavePreferences = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('denova_user_profile', JSON.stringify(userProfile))
+      localStorage.setItem('denova_visual_settings', JSON.stringify(visualSettings))
+      localStorage.setItem('denova_config', JSON.stringify(config))
+    }
+    Toast.notify({ type: 'success', message: 'Personalización y perfil guardados.' })
+    setShowSettings(false)
+  }
 
   // --- Estados de Configuración ---
   const [config, setConfig] = useState({
@@ -855,31 +1002,35 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
             })}
         </div>
 
-        {/* Footer del Sidebar: Perfil de Cabina */}
+        {/* Footer del Sidebar: Perfil de Cabina & Personalización */}
         <div className={`p-3 sm:p-3.5 border-t border-inherit flex items-center justify-between ${
           darkMode ? 'bg-[#080E1C]' : 'bg-[#F8FAFC]'
         }`}>
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="relative shrink-0">
-              <div className="h-9 w-9 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center border border-slate-200 dark:border-slate-700 overflow-hidden p-0.5 shadow-sm">
-                <img src="/images/user-avatar.png" alt="Perfil" className="h-full w-full object-contain" />
+              <div className="h-9 w-9 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+                <img
+                  src={userProfile.avatar || '/images/user-avatar.png'}
+                  alt={userProfile.name}
+                  className="h-full w-full object-cover"
+                />
               </div>
               <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900"></span>
             </div>
             <div className="flex flex-col truncate">
-              <span className="text-xs font-semibold truncate">{config.clinicName}</span>
-              <span className="text-[10px] text-slate-500 truncate">Profesional Verificado</span>
+              <span className="text-xs font-semibold truncate">{userProfile.name || config.clinicName}</span>
+              <span className="text-[10px] text-slate-500 truncate">{userProfile.role || 'Profesional Verificado'}</span>
             </div>
           </div>
 
           <button
             onClick={() => setShowSettings(true)}
-            className={`p-2 rounded-lg transition-colors shrink-0 ${
-              darkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-200 text-slate-600'
+            className={`p-2 rounded-xl transition-all shrink-0 ${
+              darkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-slate-900'
             }`}
-            title="Configuración"
+            title="Personalización y Perfil"
           >
-            <Settings className="h-4 w-4" />
+            <Palette className="h-4 w-4" />
           </button>
         </div>
       </aside>
@@ -933,16 +1084,14 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
               <Sliders className="h-4 w-4" />
             </button>
 
-            <div className="flex flex-col min-w-0">
-              <h2 className="text-xs sm:text-sm font-bold truncate flex items-center gap-1.5 sm:gap-2">
-                <span className="truncate">{currentTitle}</span>
-                <span className="shrink-0 text-[9px] sm:text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-500/10 text-[#0062D2] dark:text-[#38BDF8] border border-blue-500/20">
-                  {selectedSkill.badge}
-                </span>
+            <div className="flex items-center gap-2 min-w-0">
+              <h2 className="text-xs sm:text-sm font-bold truncate">
+                {currentTitle}
               </h2>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate hidden sm:block">
-                Denova Vademécum • Soluciones Dermocosméticas de Alta Gama
-              </span>
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 shrink-0">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Amyet</span>
+              </div>
             </div>
           </div>
 
@@ -951,7 +1100,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
             {/* Botón Manos Libres en Cabina */}
             <button
               onClick={() => setShowVoiceOrb(true)}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r from-[#0062D2] to-[#00B4D8] text-white hover:opacity-95 transition-all shadow-md shadow-[#0062D2]/20"
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-semibold bg-gradient-to-r ${currentTheme.gradientClass} text-white hover:opacity-95 transition-all shadow-md ${currentTheme.shadowClass}`}
               title="Modo Manos Libres"
             >
               <Headphones className="h-3.5 w-3.5 shrink-0" />
@@ -979,13 +1128,14 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
             const isUser = !msg.isAnswer
             const isSpeaking = isSpeakingMessageId === msg.id
             const lastThought = msg.agent_thoughts?.[msg.agent_thoughts.length - 1]?.thought
+            const fontSizeClass = visualSettings.fontSize === 'sm' ? 'text-xs' : visualSettings.fontSize === 'lg' ? 'text-sm sm:text-base' : 'text-xs sm:text-sm'
 
             return (
               <div key={msg.id || index} className={`flex gap-2.5 sm:gap-3.5 max-w-4xl mx-auto ${isUser ? 'justify-end' : 'justify-start'}`}>
 
                 {/* Avatar Asistente Amyet */}
                 {!isUser && (
-                  <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white dark:bg-[#0F182B] border border-blue-200 dark:border-slate-700 shadow-md shadow-[#0062D2]/20 overflow-hidden p-0.5">
+                  <div className={`flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white dark:bg-[#0F182B] border border-blue-200 dark:border-slate-700 shadow-md ${currentTheme.shadowClass} overflow-hidden p-0.5`}>
                     <img src="/images/amyet-bot.png" alt="Amyet Bot" className="h-full w-full object-contain" />
                   </div>
                 )}
@@ -997,15 +1147,21 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                     <div className={`text-[11px] font-mono px-3 py-1.5 rounded-lg border flex items-center gap-2 select-text ${
                       darkMode ? 'bg-slate-900/90 border-slate-800 text-slate-400' : 'bg-blue-50/60 border-blue-100 text-[#0052B4]'
                     }`}>
-                      <Activity className="h-3.5 w-3.5 text-[#00B4D8] animate-pulse shrink-0" />
+                      <Activity className={`h-3.5 w-3.5 ${currentTheme.accentClass} animate-pulse shrink-0`} />
                       <span className="select-text">{lastThought}</span>
                     </div>
                   )}
 
                   {/* Burbuja de Mensaje */}
-                  <div className={`relative px-3.5 py-3 sm:px-4 sm:py-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed select-text ${
+                  <div className={`relative px-3.5 py-3 sm:px-4 sm:py-3.5 rounded-2xl ${fontSizeClass} leading-relaxed select-text ${
                     isUser
-                      ? 'bg-[#0062D2] !text-white rounded-tr-xs shadow-md shadow-[#0062D2]/15'
+                      ? visualSettings.bubbleStyle === 'glass'
+                        ? darkMode
+                          ? 'bg-blue-600/30 border border-blue-400/30 text-white backdrop-blur-md rounded-tr-xs shadow-md'
+                          : 'bg-blue-600/20 border border-blue-500/30 text-slate-900 backdrop-blur-md rounded-tr-xs shadow-md'
+                        : visualSettings.bubbleStyle === 'minimal'
+                          ? `${currentTheme.bgClass} !text-white rounded-tr-xs shadow-none`
+                          : `bg-gradient-to-r ${currentTheme.gradientClass} !text-white rounded-tr-xs shadow-md ${currentTheme.shadowClass}`
                       : darkMode
                         ? 'bg-[#0F182B] border border-slate-800 text-slate-100 rounded-tl-xs shadow-sm'
                         : 'bg-white border border-[#E1E8F5] text-slate-800 rounded-tl-xs shadow-sm'
@@ -1026,7 +1182,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                               ))}
                             </div>
                           )}
-                          <div className="whitespace-pre-wrap font-normal text-white select-text">
+                          <div className="whitespace-pre-wrap font-normal select-text">
                             {msg.content}
                           </div>
                         </>
@@ -1039,7 +1195,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                         )
                         : (
                           <div className="flex items-center gap-2 py-1">
-                            <RefreshCw className="h-3.5 w-3.5 animate-spin text-[#0062D2]" />
+                            <RefreshCw className={`h-3.5 w-3.5 animate-spin ${currentTheme.accentClass}`} />
                             <span className="text-xs text-slate-400">Analizando formulaciones y generando respuesta clínica...</span>
                           </div>
                         )}
@@ -1053,7 +1209,7 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                             <button
                               key={qIdx}
                               onClick={() => handleSendMessage(q)}
-                              className="text-left text-xs px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-[#0062D2] dark:text-[#38BDF8] transition-colors cursor-pointer"
+                              className={`text-left text-xs px-2.5 py-1 rounded-lg ${currentTheme.lightBg} hover:opacity-80 transition-colors cursor-pointer`}
                             >
                               {q}
                             </button>
@@ -1073,8 +1229,8 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                         <span>•</span>
                         <button
                           onClick={() => speakText(msg.content, msg.id)}
-                          className={`hover:text-[#0062D2] flex items-center gap-1 transition-colors cursor-pointer ${
-                            isSpeaking ? 'text-[#0062D2] font-bold' : ''
+                          className={`hover:${currentTheme.accentClass} flex items-center gap-1 transition-colors cursor-pointer ${
+                            isSpeaking ? `${currentTheme.accentClass} font-bold` : ''
                           }`}
                         >
                           {isSpeaking ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
@@ -1096,7 +1252,11 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                 {/* Avatar del Usuario / Doctor */}
                 {isUser && (
                   <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-md overflow-hidden p-0.5">
-                    <img src="/images/user-avatar.png" alt="Usuario" className="h-full w-full object-contain" />
+                    <img
+                      src={userProfile.avatar || '/images/user-avatar.png'}
+                      alt={userProfile.name}
+                      className="h-full w-full object-cover rounded-lg sm:rounded-xl"
+                    />
                   </div>
                 )}
               </div>
@@ -1149,80 +1309,8 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
               </div>
             )}
 
-            {/* Barra de Selección de Habilidades y Marca */}
-            <div className="flex items-center justify-between px-3 sm:px-4 pt-2 sm:pt-2.5 text-xs border-b border-inherit pb-2 gap-2">
-
-              <div className="flex items-center gap-2 min-w-0">
-                {/* Selector de Habilidad */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowSkillDropdown(!showSkillDropdown)}
-                    className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-xl font-medium transition-all border max-w-[180px] sm:max-w-none ${
-                      darkMode
-                        ? 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-700'
-                        : 'bg-slate-50 hover:bg-blue-50 text-slate-800 border-slate-200'
-                    }`}
-                  >
-                    <selectedSkill.icon className="h-3.5 w-3.5 text-[#0062D2] dark:text-[#38BDF8] shrink-0" />
-                    <span className="font-semibold truncate text-[11px] sm:text-xs">{selectedSkill.name}</span>
-                    <ChevronDown className="h-3 w-3 opacity-60 shrink-0" />
-                  </button>
-
-                  {/* Dropdown de Habilidades */}
-                  {showSkillDropdown && (
-                    <div className={`absolute bottom-full mb-2 left-0 w-[calc(100vw-2.5rem)] sm:w-80 max-w-xs sm:max-w-sm rounded-2xl border p-2 shadow-2xl z-50 ${
-                      darkMode ? 'bg-[#0A101D] border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
-                    }`}>
-                      <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Especialidad / Rol en Cabina
-                      </div>
-                      {skills.map(s => (
-                        <button
-                          key={s.id}
-                          onClick={() => {
-                            setSelectedSkill(s)
-                            setShowSkillDropdown(false)
-                            if (s.id === 'protocols') {
-                              setShowDocModal(true)
-                            }
-                          }}
-                          className={`w-full flex items-start gap-2.5 p-2 rounded-xl text-left transition-colors ${
-                            selectedSkill.id === s.id
-                              ? darkMode ? 'bg-blue-950/80 text-white' : 'bg-blue-50 text-[#0052B4]'
-                              : darkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-50'
-                          }`}
-                        >
-                          <s.icon className="h-4 w-4 mt-0.5 text-[#0062D2] shrink-0" />
-                          <div className="flex flex-col">
-                            <span className="text-xs font-semibold">{s.name}</span>
-                            <span className="text-[10px] text-slate-500">{s.desc}</span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Botón Acceso Rápido a Plantillas de Documentos */}
-                <button
-                  onClick={() => setShowDocModal(true)}
-                  className="hidden sm:flex items-center gap-1 text-[11px] font-medium text-[#0062D2] dark:text-[#38BDF8] hover:underline shrink-0"
-                >
-                  <FileText className="h-3 w-3" />
-                  <span>Plantillas</span>
-                </button>
-              </div>
-
-              {/* Branding de Conexión */}
-              <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 shrink-0">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="hidden sm:inline">Conexión Amyet IA / Studio</span>
-                <span className="sm:hidden">Online</span>
-              </div>
-            </div>
-
             {/* Input de Texto y Controles */}
-            <form onSubmit={(e) => { e.preventDefault(); handleSendMessage() }} className="p-2.5 sm:p-3 pt-2">
+            <form onSubmit={(e) => { e.preventDefault(); handleSendMessage() }} className="p-2.5 sm:p-3">
               <textarea
                 ref={textareaRef}
                 value={inputText}
@@ -1239,12 +1327,12 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
               />
 
               <div className="flex items-center justify-between pt-2 border-t border-inherit">
-                <div className="flex items-center gap-0.5 sm:gap-1">
+                <div className="flex items-center gap-1.5 min-w-0">
 
                   {/* Adjuntar Ficha o Imagen */}
                   <label className={`cursor-pointer p-2 rounded-xl transition-colors ${
                     darkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-blue-50 text-slate-600'
-                  }`} title="Adjuntar foto dérmica o PDF">
+                  }`} title="Adjuntar archivo o imagen">
                     <Paperclip className="h-4 w-4" />
                     <input
                       type="file"
@@ -1256,18 +1344,6 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                       }}
                     />
                   </label>
-
-                  {/* Analizar Enlace / Ficha Web */}
-                  <button
-                    type="button"
-                    onClick={() => setShowUrlModal(true)}
-                    className={`p-2 rounded-xl transition-colors ${
-                      darkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-blue-50 text-slate-600'
-                    }`}
-                    title="Analizar URL o Ficha Técnica Web"
-                  >
-                    <Globe className="h-4 w-4" />
-                  </button>
 
                   {/* Dictado por Voz (Manos Libres) */}
                   <button
@@ -1285,44 +1361,81 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
                     {isRecordingAudio ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                   </button>
 
-                  {/* Botón Plantillas para móvil */}
-                  <button
-                    type="button"
-                    onClick={() => setShowDocModal(true)}
-                    className={`sm:hidden p-2 rounded-xl transition-colors ${
-                      darkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-blue-50 text-slate-600'
-                    }`}
-                    title="Plantillas de Documentos"
-                  >
-                    <FileText className="h-4 w-4 text-[#0062D2] dark:text-[#38BDF8]" />
-                  </button>
+                  {/* Selector de Generador de Protocolos y Fichas */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowSkillDropdown(!showSkillDropdown)}
+                      className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl font-medium transition-all border max-w-[170px] sm:max-w-xs ${
+                        darkMode
+                          ? 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-700'
+                          : 'bg-slate-50 hover:bg-blue-50 text-slate-800 border-slate-200'
+                      }`}
+                    >
+                      <selectedSkill.icon className={`h-3.5 w-3.5 ${currentTheme.accentClass} shrink-0`} />
+                      <span className="font-semibold truncate text-[11px] sm:text-xs">{selectedSkill.name}</span>
+                      <ChevronDown className="h-3 w-3 opacity-60 shrink-0" />
+                    </button>
+
+                    {/* Dropdown de Habilidades */}
+                    {showSkillDropdown && (
+                      <div className={`absolute bottom-full mb-2 left-0 w-[calc(100vw-2.5rem)] sm:w-80 max-w-xs sm:max-w-sm rounded-2xl border p-2 shadow-2xl z-50 ${
+                        darkMode ? 'bg-[#0A101D] border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'
+                      }`}>
+                        <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Especialidad / Rol en Cabina
+                        </div>
+                        {skills.map(s => (
+                          <button
+                            type="button"
+                            key={s.id}
+                            onClick={() => {
+                              setSelectedSkill(s)
+                              setShowSkillDropdown(false)
+                            }}
+                            className={`w-full flex items-start gap-2.5 p-2 rounded-xl text-left transition-colors ${
+                              selectedSkill.id === s.id
+                                ? darkMode ? 'bg-blue-950/80 text-white' : `${currentTheme.lightBg} font-semibold`
+                                : darkMode ? 'hover:bg-slate-900' : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <s.icon className={`h-4 w-4 mt-0.5 ${currentTheme.accentClass} shrink-0`} />
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold">{s.name}</span>
+                              <span className="text-[10px] text-slate-500">{s.desc}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                 </div>
 
-                {/* Botón Enviar / Detener con estilo Denova */}
+                {/* Botón Enviar / Detener con solo Iconos */}
                 {isResponding
                   ? (
                     <button
                       type="button"
                       onClick={handleStopResponding}
-                      className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/25 cursor-pointer"
+                      className="flex items-center justify-center h-9 w-9 rounded-xl transition-all shadow-md bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/25 cursor-pointer shrink-0"
                       title="Detener consulta"
                     >
-                      <Square className="h-3 w-3 fill-white" />
-                      <span>Detener</span>
+                      <Square className="h-4 w-4 fill-white" />
                     </button>
                   )
                   : (
                     <button
                       type="submit"
                       disabled={(!inputText.trim() && attachedFiles.length === 0) || attachedFiles.some(f => f.uploading)}
-                      className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md ${
+                      className={`flex items-center justify-center h-9 w-9 rounded-xl transition-all shadow-md shrink-0 ${
                         (inputText.trim() || attachedFiles.length > 0) && !attachedFiles.some(f => f.uploading)
-                          ? 'bg-[#0062D2] hover:bg-[#0052B4] text-white shadow-[#0062D2]/25'
+                          ? `${currentTheme.bgClass} ${currentTheme.bgHoverClass} text-white ${currentTheme.shadowClass} cursor-pointer`
                           : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
                       }`}
+                      title="Enviar consulta"
                     >
-                      <span>Consultar</span>
-                      <CornerDownLeft className="h-3 w-3" />
+                      <Send className="h-4 w-4" />
                     </button>
                   )}
               </div>
@@ -1503,73 +1616,417 @@ export default function AmyetChatApp({ params }: IMainProps = {}) {
       )}
 
       {/* ========================================================= */}
-      {/* MODAL: AJUSTES DE CLÍNICA Y SERVIDOR                      */}
+      {/* MODAL: CENTRO DE PERSONALIZACIÓN, PERFIL Y APARIENCIA     */}
       {/* ========================================================= */}
       {showSettings && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-3 sm:p-4">
-          <div className={`relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-3xl p-4 sm:p-6 border shadow-2xl ${
+          <div className={`relative w-full max-w-xl max-h-[92vh] flex flex-col rounded-2xl sm:rounded-3xl border shadow-2xl overflow-hidden ${
             darkMode ? 'bg-[#0A101E] border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
           }`}>
-            <div className="flex items-center justify-between pb-3 border-b border-inherit">
-              <div className="flex items-center gap-2 text-[#0062D2]">
-                <Settings className="h-5 w-5" />
-                <h3 className="text-sm font-bold">Configuración de Clínica & Amyet IA</h3>
+
+            {/* Cabecera del Modal */}
+            <div className="flex items-center justify-between p-4 sm:px-6 sm:py-4 border-b border-inherit shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-xl ${currentTheme.lightBg}`}>
+                  <Palette className={`h-5 w-5 ${currentTheme.accentClass}`} />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold">Personalización & Perfil</h3>
+                  <p className="text-[11px] text-slate-400">Personaliza tu foto de perfil y el aspecto visual de la web</p>
+                </div>
               </div>
-              <button onClick={() => setShowSettings(false)} className="p-1 rounded-lg text-slate-400">
+              <button
+                onClick={() => setShowSettings(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="space-y-4 mt-4 text-xs">
-              <div className="space-y-1">
-                <label className="font-semibold text-slate-400">Nombre del Centro / Clínica</label>
-                <input
-                  type="text"
-                  value={config.clinicName}
-                  onChange={e => setConfig({ ...config, clinicName: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border outline-none bg-transparent"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="font-semibold text-slate-400">Velocidad de Voz Asistente (TTS)</label>
-                <div className="flex items-center justify-between">
-                  <input
-                    type="range"
-                    min="0.8"
-                    max="1.4"
-                    step="0.1"
-                    value={config.speechRate}
-                    onChange={e => setConfig({ ...config, speechRate: parseFloat(e.target.value) })}
-                    className="w-full accent-[#0062D2]"
-                  />
-                  <span className="ml-3 font-mono font-bold text-[#0062D2]">{config.speechRate}x</span>
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-2 border-t border-inherit">
-                <span className="font-semibold text-slate-400 block">Herramientas MCP Activas en WordPress</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex items-center gap-2 p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px]">
-                    <Package className="h-4 w-4 text-[#0062D2]" />
-                    <span>MCP WooCommerce</span>
-                  </div>
-                  <div className="flex items-center gap-2 p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px]">
-                    <Droplet className="h-4 w-4 text-[#00B4D8]" />
-                    <span>MCP Vademécum</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end mt-5 pt-3 border-t border-inherit">
+            {/* Selector de Pestañas */}
+            <div className="flex items-center gap-1.5 px-4 sm:px-6 pt-3 pb-1 border-b border-inherit shrink-0 overflow-x-auto">
               <button
-                onClick={() => setShowSettings(false)}
-                className="px-5 py-2 rounded-xl bg-[#0062D2] text-white text-xs font-bold hover:bg-[#0052B4]"
+                type="button"
+                onClick={() => setActiveSettingsTab('visual')}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                  activeSettingsTab === 'visual'
+                    ? `${currentTheme.lightBg} ${currentTheme.borderClass} border`
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                }`}
               >
-                Guardar Parámetros
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Aspecto Visual</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveSettingsTab('profile')}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                  activeSettingsTab === 'profile'
+                    ? `${currentTheme.lightBg} ${currentTheme.borderClass} border`
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                }`}
+              >
+                <User className="h-3.5 w-3.5" />
+                <span>Mi Perfil & Foto</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveSettingsTab('system')}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                  activeSettingsTab === 'system'
+                    ? `${currentTheme.lightBg} ${currentTheme.borderClass} border`
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                }`}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                <span>Sistema & Voz</span>
               </button>
             </div>
+
+            {/* Contenido de Pestañas con Scroll */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 text-xs">
+
+              {/* ========================================================= */}
+              {/* TAB 1: ASPECTO VISUAL                                     */}
+              {/* ========================================================= */}
+              {activeSettingsTab === 'visual' && (
+                <div className="space-y-5">
+
+                  {/* Selector de Color de Acento */}
+                  <div className="space-y-2.5">
+                    <label className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">
+                      Color de Acento y Marca
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {Object.values(COLOR_THEMES).map((th) => {
+                        const isSelected = visualSettings.accentColor === th.id
+                        return (
+                          <button
+                            key={th.id}
+                            type="button"
+                            onClick={() => setVisualSettings({ ...visualSettings, accentColor: th.id as any })}
+                            className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all text-left ${
+                              isSelected
+                                ? `${th.borderClass} ${th.lightBg} ring-2 ${th.ringClass} font-semibold`
+                                : darkMode
+                                  ? 'border-slate-800 bg-slate-900/50 hover:bg-slate-800/80 text-slate-300'
+                                  : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            <span
+                              className="h-5 w-5 rounded-full shrink-0 shadow-sm flex items-center justify-center"
+                              style={{ backgroundColor: th.color }}
+                            >
+                              {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
+                            </span>
+                            <span className="text-xs truncate">{th.name}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Modo Claro / Oscuro */}
+                  <div className="space-y-2.5">
+                    <label className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">
+                      Modo de Visualización
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setDarkMode(false)}
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                          !darkMode
+                            ? 'border-[#0062D2] bg-blue-50/70 text-[#0062D2] ring-2 ring-[#0062D2]/30 font-semibold'
+                            : 'border-slate-800 bg-slate-900/50 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        <Sun className="h-5 w-5 text-amber-500 shrink-0" />
+                        <div className="text-left">
+                          <div className="text-xs font-semibold">Claro Clínico</div>
+                          <div className="text-[10px] text-slate-400">Luminoso para consulta</div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setDarkMode(true)}
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                          darkMode
+                            ? 'border-[#0062D2] bg-blue-950/40 text-white ring-2 ring-[#0062D2]/30 font-semibold'
+                            : 'border-slate-200 bg-slate-50 text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <Moon className="h-5 w-5 text-blue-400 shrink-0" />
+                        <div className="text-left">
+                          <div className="text-xs font-semibold">Oscuro Noche</div>
+                          <div className="text-[10px] text-slate-400">Alto contraste estético</div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Tamaño de Tipografía */}
+                  <div className="space-y-2.5">
+                    <label className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">
+                      Tamaño de Letra en el Chat
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'sm', label: 'Compacta', desc: '12px' },
+                        { id: 'base', label: 'Estándar', desc: '14px' },
+                        { id: 'lg', label: 'Grande', desc: '16px' },
+                      ].map(opt => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setVisualSettings({ ...visualSettings, fontSize: opt.id as any })}
+                          className={`p-2.5 rounded-xl border text-center transition-all ${
+                            visualSettings.fontSize === opt.id
+                              ? `${currentTheme.lightBg} ${currentTheme.borderClass} ring-1 ${currentTheme.ringClass} font-semibold`
+                              : darkMode
+                                ? 'border-slate-800 bg-slate-900/50 text-slate-400 hover:text-white'
+                                : 'border-slate-200 bg-slate-50 text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <div className="text-xs font-semibold">{opt.label}</div>
+                          <div className="text-[10px] text-slate-400">{opt.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Estilo de Burbujas de Mensaje */}
+                  <div className="space-y-2.5">
+                    <label className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">
+                      Estilo de Burbuja de Mensajes
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { id: 'modern', label: 'Degradado', desc: 'Moderno' },
+                        { id: 'glass', label: 'Cristal', desc: 'Glassmorphism' },
+                        { id: 'minimal', label: 'Plano', desc: 'Minimalista' },
+                      ].map(st => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => setVisualSettings({ ...visualSettings, bubbleStyle: st.id as any })}
+                          className={`p-2.5 rounded-xl border text-center transition-all ${
+                            visualSettings.bubbleStyle === st.id
+                              ? `${currentTheme.lightBg} ${currentTheme.borderClass} ring-1 ${currentTheme.ringClass} font-semibold`
+                              : darkMode
+                                ? 'border-slate-800 bg-slate-900/50 text-slate-400 hover:text-white'
+                                : 'border-slate-200 bg-slate-50 text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <div className="text-xs font-semibold">{st.label}</div>
+                          <div className="text-[10px] text-slate-400">{st.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+              {/* ========================================================= */}
+              {/* TAB 2: MI PERFIL & FOTO                                   */}
+              {/* ========================================================= */}
+              {activeSettingsTab === 'profile' && (
+                <div className="space-y-5">
+
+                  {/* Subir Foto de Perfil */}
+                  <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-center gap-4 ${
+                    darkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="relative shrink-0">
+                      <div className="h-20 w-20 rounded-2xl overflow-hidden border-2 border-slate-300 dark:border-slate-700 shadow-md bg-white dark:bg-slate-950">
+                        <img
+                          src={userProfile.avatar || '/images/user-avatar.png'}
+                          alt="Avatar actual"
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                      <label
+                        className={`absolute -bottom-1.5 -right-1.5 p-1.5 rounded-xl cursor-pointer shadow-lg text-white ${currentTheme.bgClass} ${currentTheme.bgHoverClass} transition-transform hover:scale-105`}
+                        title="Subir nueva foto"
+                      >
+                        <Camera className="h-3.5 w-3.5" />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleAvatarUpload}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="flex flex-col items-center sm:items-start text-center sm:text-left space-y-1.5">
+                      <span className="font-bold text-xs">Foto del Profesional / Cabina</span>
+                      <p className="text-[11px] text-slate-400">
+                        Sube una foto personalizada para los mensajes y la barra lateral (máx. 2MB).
+                      </p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <label className={`cursor-pointer px-3 py-1.5 rounded-xl text-xs font-bold text-white shadow-sm transition-all ${currentTheme.bgClass} ${currentTheme.bgHoverClass}`}>
+                          <span>Cargar desde equipo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleAvatarUpload}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = { ...userProfile, avatar: '/images/user-avatar.png' }
+                            setUserProfile(updated)
+                            if (typeof window !== 'undefined') { localStorage.setItem('denova_user_profile', JSON.stringify(updated)) }
+                            Toast.notify({ type: 'info', message: 'Avatar restablecido al original.' })
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-inherit text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                          title="Restablecer"
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          <span>Original</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Galería de Avatares Predefinidos */}
+                  <div className="space-y-2">
+                    <label className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">
+                      O elige un Avatar Clínico Predeterminado
+                    </label>
+                    <div className="grid grid-cols-5 gap-2">
+                      {PRESET_AVATARS.map((av) => {
+                        const isSelected = userProfile.avatar === av.src
+                        return (
+                          <button
+                            key={av.id}
+                            type="button"
+                            onClick={() => {
+                              const updated = { ...userProfile, avatar: av.src }
+                              setUserProfile(updated)
+                              if (typeof window !== 'undefined') { localStorage.setItem('denova_user_profile', JSON.stringify(updated)) }
+                            }}
+                            className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all ${
+                              isSelected
+                                ? `${currentTheme.borderClass} ${currentTheme.lightBg} ring-2 ${currentTheme.ringClass}`
+                                : darkMode
+                                  ? 'border-slate-800 hover:bg-slate-900 text-slate-400'
+                                  : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            <div className="h-10 w-10 rounded-xl overflow-hidden bg-white dark:bg-slate-900 border border-inherit">
+                              <img src={av.src} alt={av.name} className="h-full w-full object-cover" />
+                            </div>
+                            <span className="text-[10px] truncate max-w-full font-medium">{av.name}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Campos de Nombre y Cargo */}
+                  <div className="space-y-3 pt-2 border-t border-inherit">
+                    <div className="space-y-1">
+                      <label className="font-semibold text-slate-400">Nombre del Profesional / Centro</label>
+                      <input
+                        type="text"
+                        value={userProfile.name}
+                        onChange={e => setUserProfile({ ...userProfile, name: e.target.value })}
+                        placeholder="Ej: Dra. Valentina Gómez"
+                        className="w-full px-3 py-2 rounded-xl border outline-none bg-transparent"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-semibold text-slate-400">Especialidad / Título</label>
+                      <input
+                        type="text"
+                        value={userProfile.role}
+                        onChange={e => setUserProfile({ ...userProfile, role: e.target.value })}
+                        placeholder="Ej: Especialista en Cosmiatría & Dermocosmética"
+                        className="w-full px-3 py-2 rounded-xl border outline-none bg-transparent"
+                      />
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+              {/* ========================================================= */}
+              {/* TAB 3: SISTEMA & VOZ                                      */}
+              {/* ========================================================= */}
+              {activeSettingsTab === 'system' && (
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-400">Nombre de la Clínica (Vademécum)</label>
+                    <input
+                      type="text"
+                      value={config.clinicName}
+                      onChange={e => setConfig({ ...config, clinicName: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border outline-none bg-transparent"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-400">Velocidad de Voz Asistente Amyet (TTS)</label>
+                    <div className="flex items-center justify-between">
+                      <input
+                        type="range"
+                        min="0.8"
+                        max="1.4"
+                        step="0.1"
+                        value={config.speechRate}
+                        onChange={e => setConfig({ ...config, speechRate: parseFloat(e.target.value) })}
+                        className={`w-full accent-[${currentTheme.color}]`}
+                      />
+                      <span className={`ml-3 font-mono font-bold ${currentTheme.accentClass}`}>{config.speechRate}x</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-2 border-t border-inherit">
+                    <span className="font-semibold text-slate-400 block">Herramientas MCP Activas en WordPress</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-2 p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px]">
+                        <Package className={`h-4 w-4 ${currentTheme.accentClass}`} />
+                        <span>MCP WooCommerce</span>
+                      </div>
+                      <div className="flex items-center gap-2 p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px]">
+                        <Droplet className="h-4 w-4 text-[#00B4D8]" />
+                        <span>MCP Vademécum</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Pie de Modal con Botón Guardar */}
+            <div className="flex items-center justify-between p-4 sm:px-6 border-t border-inherit shrink-0 bg-slate-50/50 dark:bg-slate-900/30">
+              <button
+                type="button"
+                onClick={() => setShowSettings(false)}
+                className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                Cerrar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSavePreferences}
+                className={`px-5 py-2 rounded-xl text-white text-xs font-bold shadow-md transition-all ${currentTheme.bgClass} ${currentTheme.bgHoverClass} ${currentTheme.shadowClass}`}
+              >
+                Guardar y Aplicar
+              </button>
+            </div>
+
           </div>
         </div>
       )}
